@@ -20,9 +20,9 @@ namespace Go_Rest_API_Automation.tests
             RestClient restClient = new RestClient(BaseUrl.UrlBase());
 
             JObject jObjectbody = new JObject();
-            jObjectbody.Add("name", "Leroy Borgan");
+            jObjectbody.Add("name", "Tomas Oliver");
             jObjectbody.Add("gender", "Male");
-            jObjectbody.Add("email", "leroy_borgan@outlook.com");
+            jObjectbody.Add("email", "tomas.oliver@outlook.com");
             jObjectbody.Add("status", "Active");
 
             RestRequest restRequest = new RestRequest("/public-api/users", Method.POST);
@@ -35,9 +35,9 @@ namespace Go_Rest_API_Automation.tests
             var json = JsonConvert.DeserializeObject<User>(restResponse.Content);
             id = json.Data.Id;
             json.Code.Should().Be(201);
-            json.Data.Name.Should().Be("Leroy Borgan");
+            json.Data.Name.Should().Be("Tomas Oliver");
             json.Data.Gender.Should().Be("Male");
-            json.Data.Email.Should().Be("leroy_borgan@outlook.com");
+            json.Data.Email.Should().Be("tomas.oliver@outlook.com");
             json.Data.Status.Should().Be("Active");
         }
 
