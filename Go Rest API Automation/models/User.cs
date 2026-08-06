@@ -1,23 +1,22 @@
-﻿using FluentAssertions;
-using FluentAssertions.Primitives;
-using Go_Rest_API_Automation.Models;
 using Newtonsoft.Json;
-using System;
-using System.Collections.Generic;
-using System.Text;
 
-namespace Go_Rest_API_Automation.client
+namespace Go_Rest_API_Automation.models
 {
     public class User
     {
-        [JsonProperty("code")]
-        public int Code { get; set; }
+        [JsonProperty("id")]
+        public int Id { get; set; }
 
-        [JsonProperty("meta")]
-        public string Meta { get; set; }
+        [JsonProperty("name")]
+        public string Name { get; set; }
 
-        [JsonProperty("data")]
-        public Data Data { get; set; }
+        [JsonProperty("email")]
+        public string Email { get; set; }
 
+        [JsonProperty("gender")]
+        public string Gender { get; set; }
+
+        [JsonProperty("status")]
+        public string Status { get; set; }
     }
 }

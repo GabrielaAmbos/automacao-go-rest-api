@@ -1,5 +1,8 @@
-﻿using FluentAssertions;
+using System.Net;
+using FluentAssertions;
 using Go_Rest_API_Automation.client;
+using Go_Rest_API_Automation.models;
+using Go_Rest_API_Automation.utils.providers;
 using NUnit.Framework;
 using RestSharp;
 
@@ -8,25 +11,34 @@ namespace Go_Rest_API_Automation.tests
     [TestFixture]
     public class DelExcluirUsuario
     {
+        private User user;
+
+        [SetUp]
+        public void CriarUsuario()
+        {
+            user = UserFactory.Create("Susan Sanders");
+        }
+
+        [TearDown]
+        public void ExcluirUsuario()
+        {
+            UserFactory.Delete(user.Id);
+        }
 
         [Test]
         public void DeveExcluirUsuarioExistente()
         {
-            string endpoint = Hooks.GetUsersEndpoint() + Hooks.GetId();
+            var response = ApiClient<User>.Request(EndpointProvider.User(user.Id), Method.DELETE);
 
-            var json = ApiClient<User>.Request(endpoint, Method.DELETE);
-
-            json.Code.Should().Be(204);
+            response.StatusCode.Should().Be(HttpStatusCode.NoContent);
         }
 
         [Test]
         public void NaoDeveExcluirUsuarioInexistente()
         {
-            string endpoint = Hooks.GetUsersEndpoint() + "-" + Hooks.GetId();
+            var response = ApiClient<User>.Request(EndpointProvider.User(-user.Id), Method.DELETE);
 
-            var json = ApiClient<User>.Request(endpoint, Method.DELETE);
-
-            json.Code.Should().Be(404);
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         }
     }
 }

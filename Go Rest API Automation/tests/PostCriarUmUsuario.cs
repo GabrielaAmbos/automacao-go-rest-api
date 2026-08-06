@@ -1,43 +1,50 @@
-﻿using FluentAssertions;
+using System.Net;
+using FluentAssertions;
 using Go_Rest_API_Automation.client;
+using Go_Rest_API_Automation.models;
+using Go_Rest_API_Automation.utils.providers;
 using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using RestSharp;
 
 namespace Go_Rest_API_Automation.tests
 {
-
+    [TestFixture]
     public class PostCriarUmUsuario
     {
-        private int LastUserId;
+        private int createdUserId;
 
         [Test]
         public void DeveCriarUmUsuario()
         {
-            string endpoint = Hooks.GetUsersEndpoint();
+            string email = UserFactory.UniqueEmail("Tomas Oliver");
 
-            JObject jObjectbody = new JObject();
-            jObjectbody.Add("name", "Tomas Oliver");
-            jObjectbody.Add("gender", "Male");
-            jObjectbody.Add("email", "tomasoliver@outlook.com");
-            jObjectbody.Add("status", "Active");
+            JObject jObjectBody = new JObject();
+            jObjectBody.Add("name", "Tomas Oliver");
+            jObjectBody.Add("gender", "male");
+            jObjectBody.Add("email", email);
+            jObjectBody.Add("status", "active");
 
-            var json = ApiClient<User>.Request(endpoint, Method.POST, jObjectbody);
+            var response = ApiClient<User>.Request(EndpointProvider.Users(), Method.POST, jObjectBody);
 
-            LastUserId = json.Data.Id;
-            json.Code.Should().Be(201);
-            json.Data.Name.Should().Be("Tomas Oliver");
-            json.Data.Gender.Should().Be("Male");
-            json.Data.Email.Should().Be("tomasoliver@outlook.com");
-            json.Data.Status.Should().Be("Active");
+            createdUserId = response.Data.Id;
+
+            response.StatusCode.Should().Be(HttpStatusCode.Created);
+            response.Data.Id.Should().BePositive();
+            response.Data.Name.Should().Be("Tomas Oliver");
+            response.Data.Gender.Should().Be("male");
+            response.Data.Email.Should().Be(email);
+            response.Data.Status.Should().Be("active");
         }
 
         [TearDown]
-        public void DeveExcluirUsuarioExistente()
+        public void ExcluirUsuarioCriado()
         {
-            string endpoint = Hooks.GetUsersEndpoint() + LastUserId;
-
-            var json = ApiClient<User>.Request(endpoint, Method.DELETE);
+            if (createdUserId != 0)
+            {
+                UserFactory.Delete(createdUserId);
+                createdUserId = 0;
+            }
         }
     }
 }

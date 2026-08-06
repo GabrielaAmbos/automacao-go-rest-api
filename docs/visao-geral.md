@@ -11,52 +11,57 @@ executar e sustentar a suíte de testes.
 
 ## API sob teste
 
-A suíte aponta para a versão legada da API do Go REST:
-
 ```
-https://gorest.co.in/public-api
+https://gorest.co.in/public/v2
 ```
 
 O recurso exercitado é `/users`.
 
-> ⚠️ **Essa versão foi descontinuada.** Hoje ela responde `301` redirecionando para
-> `https://gorest.co.in/public/v2`, que tem contrato diferente. É por isso que os 7 testes
-> falham. Veja [Pontos de atenção](pontos-de-atencao.md#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte).
-> O restante desta seção descreve o contrato da v1, que é o que o código ainda assume.
+### Formato da resposta
 
-### Particularidade importante: código de status no corpo
-
-Essa versão da API responde **HTTP 200 na maior parte das chamadas**, e informa o
-resultado real da operação dentro do corpo da resposta, no campo `code`:
+A v2 devolve o payload direto, sem envelope, e usa o **status HTTP** para comunicar o
+resultado da operação:
 
 ```json
 {
-  "code": 200,
-  "meta": null,
-  "data": {
-    "id": 4392,
-    "name": "Leroy Borgan",
-    "email": "leroyborgan123@outlook.com",
-    "gender": "Male",
-    "status": "Active",
-    "created_at": "2021-05-04T12:00:00.000+05:30",
-    "updated_at": "2021-05-04T12:00:00.000+05:30"
-  }
+  "id": 8571390,
+  "name": "Leroy Borgan",
+  "email": "leroy.borgan.a1b2c3@example.test",
+  "gender": "male",
+  "status": "active"
 }
 ```
 
-Por isso **todas as asserções da suíte verificam `json.Code`**, e não o status HTTP
-da resposta do RestSharp. Esse é o motivo de existirem os modelos
-[`User`](../Go%20Rest%20API%20Automation/models/User.cs) (envelope) e
-[`Data`](../Go%20Rest%20API%20Automation/models/Data.cs) (payload do usuário).
+Por isso as asserções verificam `response.StatusCode` e os campos de `response.Data`,
+mapeados pelo modelo [`User`](../Go%20Rest%20API%20Automation/models/User.cs).
+
+Atenção aos valores: `gender` e `status` são **minúsculos** (`male`, `female`, `active`,
+`inactive`).
+
+### Status por operação
+
+| Operação | Sucesso | Recurso inexistente |
+| --- | --- | --- |
+| `GET /users/{id}` | `200 OK` | `404 Not Found` |
+| `POST /users` | `201 Created` | — |
+| `PUT /users/{id}` | `200 OK` | `404 Not Found` |
+| `DELETE /users/{id}` | `204 No Content` (corpo vazio) | `404 Not Found` |
+
+Erros de validação no `POST` retornam `422` com a lista de campos:
+
+```json
+[{"field":"email","message":"can't be blank"}]
+```
 
 ### Autenticação
 
-A API exige um token Bearer no header `Authorization`. O token é fornecido por
+A API exige um token Bearer no header `Authorization`. O token é lido da variável de
+ambiente `GOREST_TOKEN` por
 [`TokenProvider`](../Go%20Rest%20API%20Automation/utils/providers/TokenProvider.cs)
-e injetado em toda requisição pelo `ApiClient`.
+e injetado em toda requisição pelo `ApiClient`. Sem a variável, a suíte falha logo no
+setup com uma mensagem explícita.
 
-> O token está fixo no código-fonte. Veja [Pontos de atenção](pontos-de-atencao.md#1-token-de-autenticação-versionado-no-repositório).
+Leitura de `/users` é pública; escrita exige o token (sem ele, `401`).
 
 ## Stack
 
@@ -92,3 +97,7 @@ estrutura encapsulada — os commits registram essa progressão:
 1. `Encapsulando com a classe Hooks` — extração do setup/teardown compartilhado
 2. `Encapsulando os requests na ApiCliente` — centralização das chamadas HTTP
 3. `Encapsulando o endpoint` — criação do `EndpointProvider`
+4. `refactor: migra a suíte para a API v2 do Go REST` — a v1 (`/public-api`) foi
+   descontinuada e passou a responder `301` com HTML, quebrando os 7 testes. A migração
+   trocou o envelope `code`/`meta`/`data` pelo payload direto e as asserções de corpo pelo
+   status HTTP

@@ -26,12 +26,13 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "{{url}}/public-api/users",
+					"raw": "{{url}}/public/v2/users",
 					"host": [
 						"{{url}}"
 					],
 					"path": [
-						"public-api",
+						"public",
+						"v2",
 						"users"
 					]
 				}
@@ -69,7 +70,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "1bab50539b9f7717e6017ae8892ee86799e3a5f5e9794a4967101d66a1eb2b4a",
+							"value": "{{token}}",
 							"type": "string"
 						}
 					]
@@ -107,12 +108,13 @@
 					}
 				},
 				"url": {
-					"raw": "{{url}}/public-api/users",
+					"raw": "{{url}}/public/v2/users",
 					"host": [
 						"{{url}}"
 					],
 					"path": [
-						"public-api",
+						"public",
+						"v2",
 						"users"
 					]
 				}
@@ -140,12 +142,13 @@
 				"method": "GET",
 				"header": [],
 				"url": {
-					"raw": "{{url}}/public-api/users/{{LastUserId}}",
+					"raw": "{{url}}/public/v2/users/{{LastUserId}}",
 					"host": [
 						"{{url}}"
 					],
 					"path": [
-						"public-api",
+						"public",
+						"v2",
 						"users",
 						"{{LastUserId}}"
 					]
@@ -188,7 +191,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "1bab50539b9f7717e6017ae8892ee86799e3a5f5e9794a4967101d66a1eb2b4a",
+							"value": "{{token}}",
 							"type": "string"
 						}
 					]
@@ -221,12 +224,13 @@
 					}
 				},
 				"url": {
-					"raw": "{{url}}/public-api/users/{{LastUserId}}",
+					"raw": "{{url}}/public/v2/users/{{LastUserId}}",
 					"host": [
 						"{{url}}"
 					],
 					"path": [
-						"public-api",
+						"public",
+						"v2",
 						"users",
 						"{{LastUserId}}"
 					]
@@ -255,7 +259,7 @@
 					"bearer": [
 						{
 							"key": "token",
-							"value": "1bab50539b9f7717e6017ae8892ee86799e3a5f5e9794a4967101d66a1eb2b4a",
+							"value": "{{token}}",
 							"type": "string"
 						}
 					]
@@ -263,12 +267,13 @@
 				"method": "DELETE",
 				"header": [],
 				"url": {
-					"raw": "{{url}}/public-api/users/{{LastUserId}}",
+					"raw": "{{url}}/public/v2/users/{{LastUserId}}",
 					"host": [
 						"{{url}}"
 					],
 					"path": [
-						"public-api",
+						"public",
+						"v2",
 						"users",
 						"{{LastUserId}}"
 					]
@@ -282,7 +287,7 @@
 		"bearer": [
 			{
 				"key": "token",
-				"value": "1bab50539b9f7717e6017ae8892ee86799e3a5f5e9794a4967101d66a1eb2b4a",
+				"value": "{{token}}",
 				"type": "string"
 			}
 		]
@@ -311,6 +316,11 @@
 		{
 			"key": "url",
 			"value": "https://gorest.co.in"
+		},
+		{
+			"key": "token",
+			"value": "",
+			"type": "string"
 		}
 	]
 }

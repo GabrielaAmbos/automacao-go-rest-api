@@ -1,5 +1,8 @@
-﻿using FluentAssertions;
+using System.Net;
+using FluentAssertions;
 using Go_Rest_API_Automation.client;
+using Go_Rest_API_Automation.models;
+using Go_Rest_API_Automation.utils.providers;
 using NUnit.Framework;
 
 namespace Go_Rest_API_Automation.tests
@@ -10,26 +13,24 @@ namespace Go_Rest_API_Automation.tests
         [Test]
         public void DeveBuscarUsuario()
         {
-            string endpoint = Hooks.GetUsersEndpoint() + Hooks.GetId();
+            User sharedUser = Hooks.SharedUser;
 
-            var json = ApiClient<User>.Request(endpoint);
+            var response = ApiClient<User>.Request(EndpointProvider.User(sharedUser.Id));
 
-            json.Code.Should().Be(200);
-            json.Data.Name.Should().Be("Leroy Borgan");
-            json.Data.Gender.Should().Be("Male");
-            json.Data.Email.Should().Be("leroyborgan123@outlook.com");
-            json.Data.Status.Should().Be("Active");
-
+            response.StatusCode.Should().Be(HttpStatusCode.OK);
+            response.Data.Id.Should().Be(sharedUser.Id);
+            response.Data.Name.Should().Be("Leroy Borgan");
+            response.Data.Email.Should().Be(sharedUser.Email);
+            response.Data.Gender.Should().Be("male");
+            response.Data.Status.Should().Be("active");
         }
 
         [Test]
         public void NaoDeveBuscarUsuario()
         {
-            string endpoint = Hooks.GetUsersEndpoint() + "-" + Hooks.GetId();
+            var response = ApiClient<User>.Request(EndpointProvider.User(-Hooks.SharedUser.Id));
 
-            var json = ApiClient<User>.Request(endpoint);
-
-            json.Code.Should().Be(404);
+            response.StatusCode.Should().Be(HttpStatusCode.NotFound);
         }
     }
 }

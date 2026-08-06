@@ -1,31 +1,27 @@
 # Casos de teste
 
-A suíte tem **7 testes** distribuídos em 4 fixtures, mais o setup/teardown global.
+A suíte tem **7 testes** distribuídos em 4 fixtures, mais a massa compartilhada do `Hooks`.
+Todos passam contra a API v2.
 
-> Este documento descreve a **intenção** de cada cenário. Nenhum deles passa atualmente —
-> o `[OneTimeSetUp]` falha antes e derruba todos. Veja
-> [Pontos de atenção](pontos-de-atencao.md#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte).
+## Massa de teste
 
-## Setup e teardown globais — `Hooks`
+### `Hooks` — usuário compartilhado somente leitura
 
 [`tests/Hooks.cs`](../Go%20Rest%20API%20Automation/tests/Hooks.cs)
 
-### `CriarUsuario()` — `[OneTimeSetUp]`
-
-Executa **uma vez antes de qualquer teste** do namespace. Cria a massa compartilhada:
-
-| Campo | Valor |
+| Hook | Ação |
 | --- | --- |
-| `name` | `Leroy Borgan` |
-| `gender` | `Male` |
-| `email` | `leroyborgan123@outlook.com` |
-| `status` | `Active` |
+| `[OneTimeSetUp]` | Cria o usuário "Leroy Borgan" via `UserFactory` e expõe em `Hooks.SharedUser` |
+| `[OneTimeTearDown]` | Exclui esse usuário |
 
-O `id` retornado fica em `LastUserId` e é exposto pelo `GetId()`.
+Consumido apenas por `GetBuscarUsuario`. O e-mail é gerado com sufixo `Guid`, então cada
+execução usa um endereço novo.
 
-### `DeveExcluirUsuario()` — `[OneTimeTearDown]`
+### `UserFactory` — massa própria por fixture
 
-Executa **uma vez após todos os testes**, excluindo o usuário criado no setup.
+[`tests/UserFactory.cs`](../Go%20Rest%20API%20Automation/tests/UserFactory.cs)
+
+Fixtures que alteram estado criam e destroem o próprio usuário, sem tocar no compartilhado.
 
 ---
 
@@ -37,19 +33,17 @@ Executa **uma vez após todos os testes**, excluindo o usuário criado no setup.
 
 Busca o usuário compartilhado e valida o corpo inteiro.
 
-- **Endpoint:** `/users/{LastUserId}`
-- **Método:** `GET`
-- **Esperado:** `code == 200`
-- **Asserções:** `name`, `gender`, `email` e `status` iguais aos valores criados no `Hooks`
+- **Endpoint:** `GET /users/{SharedUser.Id}`
+- **Esperado:** `200 OK`
+- **Asserções:** `id`, `name`, `email` iguais aos do usuário criado; `gender == "male"`;
+  `status == "active"`
 
 ### `NaoDeveBuscarUsuario`
 
-Busca um ID inválido — o teste concatena um `-` antes do ID, produzindo algo como
-`/users/-4392`.
+Busca um ID negativo, que a API trata como inexistente.
 
-- **Endpoint:** `/users/-{LastUserId}`
-- **Método:** `GET`
-- **Esperado:** `code == 404`
+- **Endpoint:** `GET /users/-{SharedUser.Id}`
+- **Esperado:** `404 Not Found`
 
 ---
 
@@ -59,31 +53,25 @@ Busca um ID inválido — o teste concatena um `-` antes do ID, produzindo algo 
 
 ### `DeveCriarUmUsuario`
 
-Único teste da suíte que cria a própria massa, em vez de usar a do `Hooks`.
-
-- **Endpoint:** `/users`
-- **Método:** `POST`
+- **Endpoint:** `POST /users`
 - **Corpo:**
 
   ```json
   {
     "name": "Tomas Oliver",
-    "gender": "Male",
-    "email": "tomasoliver@outlook.com",
-    "status": "Active"
+    "gender": "male",
+    "email": "tomas.oliver.<guid>@example.test",
+    "status": "active"
   }
   ```
 
-- **Esperado:** `code == 201`
-- **Asserções:** `name`, `gender`, `email` e `status` refletem o corpo enviado
+- **Esperado:** `201 Created`
+- **Asserções:** `id` positivo; `name`, `gender`, `email` e `status` refletem o corpo enviado
 
-### `DeveExcluirUsuarioExistente` — `[TearDown]`
+### `ExcluirUsuarioCriado` — `[TearDown]`
 
-Limpeza local da fixture: exclui o usuário criado no teste acima usando o `LastUserId`
-guardado no campo de instância.
-
-> Esse teardown roda após **cada** teste da fixture e não valida o resultado da exclusão.
-> Veja [Pontos de atenção](pontos-de-atencao.md#4-concatenação-de-endpoint-sem-separador-no-teardown-do-post).
+Exclui o usuário criado, usando o `id` guardado no teste. O guard `createdUserId != 0`
+evita chamada inútil quando o teste falha antes de criar.
 
 ---
 
@@ -91,33 +79,34 @@ guardado no campo de instância.
 
 [`tests/PutAlterarUsuario.cs`](../Go%20Rest%20API%20Automation/tests/PutAlterarUsuario.cs)
 
+Cria a própria massa no `[SetUp]` e limpa no `[TearDown]` — o teste altera estado e não
+pode usar o usuário compartilhado.
+
 ### `DeveAlterarUsuarioExistente`
 
-Altera nome e e-mail do usuário compartilhado.
-
-- **Endpoint:** `/users/{LastUserId}`
-- **Método:** `PUT`
+- **Endpoint:** `PUT /users/{id}`
 - **Corpo:**
 
   ```json
   {
-    "name": "Ronald McDonald",
-    "email": "ronaldmcdonald@hotmail.com",
-    "status": "Active"
+    "name": "Ronald McDonald Jr",
+    "email": "ronald.mcdonald.<guid>@example.test",
+    "status": "inactive"
   }
   ```
 
-- **Esperado:** `code == 200`
-- **Asserções:** `name`, `email` e `status` atualizados; `gender` permanece `Male`
-  (não foi enviado no corpo, valida que a API preserva o campo)
+- **Esperado:** `200 OK`
+- **Asserções:** `id` inalterado; `name`, `email` e `status` atualizados; **`gender`
+  permanece `male`** — não foi enviado no corpo, então valida que a API preserva campos
+  omitidos
+
+O `status` muda para `inactive` de propósito: se o teste enviasse o mesmo valor que já
+estava lá, a asserção passaria mesmo que o `PUT` não tivesse efeito.
 
 ### `NaoDeveAlterarUsuario`
 
-Tenta alterar um ID inválido.
-
-- **Endpoint:** `/users/-{LastUserId}`
-- **Método:** `PUT`
-- **Esperado:** `code == 404`
+- **Endpoint:** `PUT /users/-{id}`
+- **Esperado:** `404 Not Found`
 
 ---
 
@@ -125,33 +114,31 @@ Tenta alterar um ID inválido.
 
 [`tests/DelExcluirUsuario.cs`](../Go%20Rest%20API%20Automation/tests/DelExcluirUsuario.cs)
 
+Também cria a própria massa no `[SetUp]`.
+
 ### `DeveExcluirUsuarioExistente`
 
-Exclui o usuário compartilhado criado pelo `Hooks`.
-
-- **Endpoint:** `/users/{LastUserId}`
-- **Método:** `DELETE`
-- **Esperado:** `code == 204`
-
-> Este teste **destrói a massa usada pelas outras fixtures**. Veja
-> [Pontos de atenção](pontos-de-atencao.md#5-acoplamento-entre-fixtures-pela-massa-compartilhada).
+- **Endpoint:** `DELETE /users/{id}`
+- **Esperado:** `204 No Content` (corpo vazio — `response.Data` vem `null`)
 
 ### `NaoDeveExcluirUsuarioInexistente`
 
-- **Endpoint:** `/users/-{LastUserId}`
-- **Método:** `DELETE`
-- **Esperado:** `code == 404`
+- **Endpoint:** `DELETE /users/-{id}`
+- **Esperado:** `404 Not Found`
+
+O `[TearDown]` roda mesmo depois do teste positivo já ter excluído o usuário: a segunda
+chamada devolve `404`, e o `UserFactory.Delete` ignora o resultado de propósito.
 
 ---
 
 ## Matriz resumida
 
-| Fixture | Teste | Verbo | `code` esperado |
+| Fixture | Teste | Verbo | Status esperado |
 | --- | --- | --- | --- |
-| `GetBuscarUsuario` | `DeveBuscarUsuario` | GET | 200 |
-| `GetBuscarUsuario` | `NaoDeveBuscarUsuario` | GET | 404 |
-| `PostCriarUmUsuario` | `DeveCriarUmUsuario` | POST | 201 |
-| `PutAlterarUsuario` | `DeveAlterarUsuarioExistente` | PUT | 200 |
-| `PutAlterarUsuario` | `NaoDeveAlterarUsuario` | PUT | 404 |
-| `DelExcluirUsuario` | `DeveExcluirUsuarioExistente` | DELETE | 204 |
-| `DelExcluirUsuario` | `NaoDeveExcluirUsuarioInexistente` | DELETE | 404 |
+| `GetBuscarUsuario` | `DeveBuscarUsuario` | GET | `200 OK` |
+| `GetBuscarUsuario` | `NaoDeveBuscarUsuario` | GET | `404 Not Found` |
+| `PostCriarUmUsuario` | `DeveCriarUmUsuario` | POST | `201 Created` |
+| `PutAlterarUsuario` | `DeveAlterarUsuarioExistente` | PUT | `200 OK` |
+| `PutAlterarUsuario` | `NaoDeveAlterarUsuario` | PUT | `404 Not Found` |
+| `DelExcluirUsuario` | `DeveExcluirUsuarioExistente` | DELETE | `204 No Content` |
+| `DelExcluirUsuario` | `NaoDeveExcluirUsuarioInexistente` | DELETE | `404 Not Found` |
