@@ -1,5 +1,8 @@
 # Como executar
 
+> **A suíte não passa hoje.** O build compila, mas os 7 testes falham porque a API alvo foi
+> descontinuada. Veja [Pontos de atenção](pontos-de-atencao.md#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte).
+
 ## Pré-requisitos
 
 - **.NET Core SDK 3.1** (target framework do projeto)
@@ -11,6 +14,22 @@ Opcional:
 
 - **Visual Studio 2019+** ou **JetBrains Rider** para rodar pela interface
 - **Postman** para as chamadas manuais da coleção
+
+## Instalando o SDK 3.1
+
+O .NET Core 3.1 saiu de suporte em dezembro de 2022 e não está mais nos gerenciadores de
+pacote (o Homebrew só oferece 6, 8 e 9). Use o script oficial, que instala em `~/.dotnet`
+sem `sudo` e sem alterar o sistema:
+
+```bash
+curl -fsSL https://dot.net/v1/dotnet-install.sh -o dotnet-install.sh
+chmod +x dotnet-install.sh
+./dotnet-install.sh --channel 3.1 --install-dir "$HOME/.dotnet"
+export PATH="$HOME/.dotnet:$PATH"
+```
+
+Em macOS com Apple Silicon não há build nativo do 3.1 — é preciso rodar sob Rosetta ou
+migrar o target framework.
 
 ## Restaurar e compilar
 
@@ -99,7 +118,27 @@ manual, útil para explorar a API ou depurar uma falha da automação.
 
 | Sintoma | Causa provável |
 | --- | --- |
+| Os 7 testes falham com `OneTimeSetUp: JsonReaderException ... value: <` | **Falha atual.** A API v1 foi descontinuada e responde HTML. Veja [item 1](pontos-de-atencao.md#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte) |
 | Todos os testes falham com `code == 401` | Token expirado ou inválido |
 | `DeveCriarUmUsuario` falha com `code == 422` | E-mail fixo já cadastrado na API — a massa não foi limpa em execução anterior |
 | `DeveBuscarUsuario` / `DeveAlterarUsuarioExistente` falham com `code == 404` | `DelExcluirUsuario` rodou antes e removeu a massa compartilhada |
 | `NullReferenceException` em `json.Data` | A API respondeu sem o campo `data` (erro de autenticação ou payload rejeitado) |
+
+### Diagnosticando pela API direto
+
+Como o `ApiClient` engole o status HTTP, vale confirmar o comportamento da API com `curl`
+antes de investigar o C#:
+
+```bash
+TOKEN="Bearer <seu-token>"
+
+# a rota que a suíte usa hoje — responde 301 para a v2
+curl -s -D - -o /dev/null -H "Authorization: $TOKEN" https://gorest.co.in/public-api/users
+
+# a v2, que é a versão viva
+curl -s -w "\nHTTP %{http_code}\n" -H "Authorization: $TOKEN" https://gorest.co.in/public/v2/users
+
+# checagem de token sem criar massa: 401 = inválido, 422 = válido
+curl -s -w "\nHTTP %{http_code}\n" -X POST -H "Authorization: $TOKEN" \
+  -H "Content-Type: application/json" -d '{}' https://gorest.co.in/public/v2/users
+```

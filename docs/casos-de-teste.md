@@ -2,6 +2,10 @@
 
 A suíte tem **7 testes** distribuídos em 4 fixtures, mais o setup/teardown global.
 
+> Este documento descreve a **intenção** de cada cenário. Nenhum deles passa atualmente —
+> o `[OneTimeSetUp]` falha antes e derruba todos. Veja
+> [Pontos de atenção](pontos-de-atencao.md#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte).
+
 ## Setup e teardown globais — `Hooks`
 
 [`tests/Hooks.cs`](../Go%20Rest%20API%20Automation/tests/Hooks.cs)

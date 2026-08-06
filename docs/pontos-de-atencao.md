@@ -1,16 +1,89 @@
 # Pontos de atenção
 
-Débitos técnicos e riscos identificados no código atual, em ordem de prioridade
-(segurança > arquitetura > confiabilidade dos testes).
+> **Estado da suíte em 06/08/2026: os 7 testes falham.**
+> Causa raiz única e externa ao código: a API alvo foi descontinuada
+> ([item 1](#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte)).
+> Os demais itens são débitos reais do código, hoje mascarados por essa falha.
+
+Resultado da última execução (`dotnet test`):
+
+```
+Total tests: 7
+     Failed: 7
+
+OneTimeSetUp: Newtonsoft.Json.JsonReaderException :
+Unexpected character encountered while parsing value: <. Path '', line 0, position 0.
+   at Go_Rest_API_Automation.client.ApiClient`1.Request(...) in client/ApiClient.cs:line 30
+   at Go_Rest_API_Automation.tests.Hooks.CriarUsuario() in tests/Hooks.cs:line 25
+```
+
+Itens em ordem de prioridade (bloqueio > segurança > arquitetura > confiabilidade).
 
 ---
 
-## 1. Token de autenticação versionado no repositório
+## 1. A API alvo foi descontinuada — bloqueia toda a suíte
+
+**Onde:** [`utils/providers/UrlProvider.cs:9`](../Go%20Rest%20API%20Automation/utils/providers/UrlProvider.cs#L9)
+
+A versão v1 da API (`/public-api`) não existe mais. Hoje ela responde **301** e redireciona
+para a v2:
+
+```
+GET https://gorest.co.in/public-api/users
+→ 301, location: https://gorest.co.in/public/v2/users
+```
+
+O `Hooks` ainda monta o caminho duplicado `base + "/public-api/users"`, e o redirect leva a
+uma rota inexistente na v2:
+
+```
+GET https://gorest.co.in/public-api/public-api/users
+→ 301 https://gorest.co.in/public/v2/public-api/users
+→ 404, content-type: text/html
+```
+
+O corpo devolvido é `<!DOCTYPE html>...`. O `ApiClient` tenta desserializá-lo como JSON e
+lança `JsonReaderException` no `<` inicial — dentro do `[OneTimeSetUp]`, o que derruba
+**todos os 7 testes** de uma vez.
+
+O token **continua válido** (verificado: `POST /public/v2/users` sem token → 401, com token
+→ 422). Não é problema de autenticação.
+
+### O que a v2 muda
+
+| | v1 (`/public-api`) | v2 (`/public/v2`) |
+| --- | --- | --- |
+| Status | No corpo, campo `code` | No HTTP da resposta |
+| Envelope | `{ code, meta, data }` | Payload direto, sem envelope |
+| `GET /users` | Objeto com `data` | Array puro |
+| `gender` / `status` | `Male` / `Active` | `male` / `active` (minúsculas) |
+
+Resposta atual da v2:
+
+```json
+[{"id":8570443,"name":"Ekadant Achari","email":"ekadant_achari@rempel.test","gender":"male","status":"active"}]
+```
+
+### Como corrigir
+
+1. `UrlProvider.BaseUrl()` → `https://gorest.co.in/public/v2`
+2. Colapsar `User` e `Data` em um único DTO — a v2 não tem envelope
+3. Trocar as asserções de `json.Code` para o status HTTP da resposta, o que exige o
+   `ApiClient` devolver o `IRestResponse` (ver [item 8](#8-status-http-nunca-é-verificado))
+4. Ajustar os valores esperados para minúsculas (`male`, `active`)
+5. Trocar o cenário negativo: `/users/-{id}` deve virar um ID inexistente válido
+
+Não é um ajuste de path — é uma migração de contrato.
+
+---
+
+## 2. Token de autenticação versionado no repositório
 
 **Onde:** [`utils/providers/TokenProvider.cs:11`](../Go%20Rest%20API%20Automation/utils/providers/TokenProvider.cs#L11)
 
 O token Bearer está literal no código-fonte e no histórico do Git. Qualquer pessoa com
-acesso ao repositório tem a credencial.
+acesso ao repositório tem a credencial — e ela **está ativa**, como a verificação acima
+confirmou.
 
 **Como corrigir:**
 
@@ -27,7 +100,28 @@ Go REST, já que permanece no histórico.
 
 ---
 
-## 2. URL base duplicada na montagem do endpoint
+## 3. Endpoint duplicado no `Hooks`
+
+**Onde:** [`tests/Hooks.cs:17`](../Go%20Rest%20API%20Automation/tests/Hooks.cs#L17)
+e [`tests/Hooks.cs:43`](../Go%20Rest%20API%20Automation/tests/Hooks.cs#L43)
+
+O `Hooks` monta endpoints à mão, ignorando o `EndpointProvider` que ele mesmo expõe:
+
+```csharp
+// OneTimeSetUp — o "/public-api" já está na BaseUrl do RestClient
+string endpoint = "/public-api/users";        // → .../public-api/public-api/users
+
+// OneTimeTearDown — GetId() já devolve "/" + id, gerando barra dupla
+string endpoint = "/public-api/users/" + GetId();   // → .../public-api/users//4392
+```
+
+Ambos deveriam usar `GetUsersEndpoint()`, e o teardown não deveria adicionar a barra que
+o `GetId()` já inclui. Esse é o defeito que, somado ao [item 1](#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte),
+produz a exceção do `OneTimeSetUp`.
+
+---
+
+## 4. URL base duplicada na montagem do endpoint
 
 **Onde:** [`utils/providers/EndpointProvider.cs:9`](../Go%20Rest%20API%20Automation/utils/providers/EndpointProvider.cs#L9)
 e [`client/ApiClient.cs:16-17`](../Go%20Rest%20API%20Automation/client/ApiClient.cs#L16-L17)
@@ -45,33 +139,13 @@ RestClient restClient = new RestClient(UrlProvider.BaseUrl());
 RestRequest restRequest = new RestRequest(endpoint, method);
 ```
 
-O RestSharp acaba recebendo a URL completa como recurso. O `EndpointProvider` deveria
-devolver apenas o caminho relativo (`"/users"`), deixando a base sob responsabilidade
-exclusiva do cliente.
+O RestSharp acaba recebendo a URL completa como recurso — funciona por acidente, porque a
+URL absoluta sobrescreve a base. O `EndpointProvider` deveria devolver apenas o caminho
+relativo (`"/users"`), deixando a base sob responsabilidade exclusiva do cliente.
 
 ---
 
-## 3. Endpoint inconsistente no teardown do `Hooks`
-
-**Onde:** [`tests/Hooks.cs:17`](../Go%20Rest%20API%20Automation/tests/Hooks.cs#L17)
-e [`tests/Hooks.cs:43`](../Go%20Rest%20API%20Automation/tests/Hooks.cs#L43)
-
-O `Hooks` monta endpoints à mão, ignorando o `EndpointProvider` que ele mesmo expõe:
-
-```csharp
-// OneTimeSetUp
-string endpoint = "/public-api/users";
-
-// OneTimeTearDown — GetId() já devolve "/" + id, gerando barra dupla
-string endpoint = "/public-api/users/" + GetId();   // "/public-api/users//4392"
-```
-
-Ambos deveriam usar `GetUsersEndpoint()`, e o teardown não deveria adicionar a barra que
-o `GetId()` já inclui.
-
----
-
-## 4. Concatenação de endpoint sem separador no teardown do POST
+## 5. Concatenação de endpoint sem separador no teardown do POST
 
 **Onde:** [`tests/PostCriarUmUsuario.cs:38`](../Go%20Rest%20API%20Automation/tests/PostCriarUmUsuario.cs#L38)
 
@@ -86,7 +160,7 @@ na API, fazendo a próxima execução falhar com `422`.
 
 ---
 
-## 5. Acoplamento entre fixtures pela massa compartilhada
+## 6. Acoplamento entre fixtures pela massa compartilhada
 
 **Onde:** [`tests/DelExcluirUsuario.cs:13-20`](../Go%20Rest%20API%20Automation/tests/DelExcluirUsuario.cs#L13-L20)
 
@@ -97,27 +171,13 @@ O NUnit executa fixtures em ordem alfabética por padrão, então `DelExcluirUsu
 **primeiro** e derruba os testes seguintes. Além disso, o `[OneTimeTearDown]` tenta
 excluir um usuário que já não existe.
 
+Hoje esse defeito está mascarado pelo [item 1](#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte):
+como o setup falha antes, nenhum teste chega a rodar. Ele reaparece assim que a API for
+migrada.
+
 **Como corrigir:** cada fixture que altera ou remove estado deve criar a própria massa,
 como `PostCriarUmUsuario` já faz. O `Hooks` deveria fornecer apenas dados de leitura, ou
 um método `CreateUser()` reutilizável.
-
----
-
-## 6. `Hooks` declarada como classe estática
-
-**Onde:** [`tests/Hooks.cs:10`](../Go%20Rest%20API%20Automation/tests/Hooks.cs#L10)
-
-```csharp
-[SetUpFixture]
-public static class Hooks
-```
-
-O NUnit espera que um `[SetUpFixture]` seja uma classe **não estática** com construtor
-público sem parâmetros — em C#, `static class` compila como `abstract sealed`. Se os
-hooks não estiverem disparando, essa é a primeira coisa a verificar.
-
-A alternativa é tornar a classe não estática e separar os helpers (`GetId()`,
-`GetUsersEndpoint()`) em uma classe de contexto própria.
 
 ---
 
@@ -137,13 +197,29 @@ ou sufixar o e-mail com um timestamp.
 
 **Onde:** [`client/ApiClient.cs:28-30`](../Go%20Rest%20API%20Automation/client/ApiClient.cs#L28-L30)
 
-O `ApiClient` descarta o `IRestResponse` e devolve apenas o objeto desserializado. Não há
-validação de `restResponse.StatusCode`, nem tratamento para respostas vazias ou não-JSON
-— nesses casos `JsonConvert.DeserializeObject` devolve `null` e o teste quebra com
-`NullReferenceException` em vez de uma mensagem útil.
+```csharp
+IRestResponse restResponse = restClient.Execute(restRequest);
 
-Como a API legada codifica o resultado no corpo, checar o `code` é válido — mas o cliente
-deveria pelo menos falhar de forma explícita quando a resposta não for desserializável.
+return JsonConvert.DeserializeObject<T>(restResponse.Content);
+```
+
+O `ApiClient` descarta o `IRestResponse` e devolve apenas o objeto desserializado. Não há
+validação de `StatusCode`, nem tratamento para respostas não-JSON.
+
+É exatamente por isso que a falha do [item 1](#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte)
+se manifesta como um `JsonReaderException` críptico em vez de "a API respondeu 404 com
+`text/html`". Um guard simples tornaria o diagnóstico imediato:
+
+```csharp
+if (!restResponse.ContentType.Contains("json"))
+{
+    throw new InvalidOperationException(
+        $"{(int)restResponse.StatusCode} {restResponse.ContentType} em {restResponse.ResponseUri}");
+}
+```
+
+Na migração para a v2 esse retorno precisa mudar de qualquer forma, já que as asserções
+passarão a depender do status HTTP.
 
 ---
 
@@ -163,18 +239,19 @@ deveria pelo menos falhar de forma explícita quando a resposta não for desseri
 - `Microsoft.NETCore.App` como `PackageReference` é obsoleto desde o .NET Core 3.0 e a
   versão declarada (2.2.8) não bate com o target framework (`netcoreapp3.1`)
 
+O build passa sem warnings mesmo assim, mas são dependências mortas.
+
 ---
 
-## 10. API alvo descontinuada
+## 10. Target framework fora de suporte
 
-A suíte aponta para `https://gorest.co.in/public-api`, que é a versão legada. A API atual
-do Go REST é `https://gorest.co.in/public/v2`, com contrato diferente:
+O projeto tem como alvo `netcoreapp3.1`, cujo suporte terminou em dezembro de 2022. O SDK
+3.1 não vem mais em gerenciadores de pacote (o Homebrew só oferece 6, 8 e 9) — é preciso
+instalá-lo pelo script oficial. Veja [Como executar](como-executar.md#instalando-o-sdk-31).
 
-- Retorna o status real no HTTP, sem o envelope `code`/`meta`/`data`
-- Responde `201`, `404`, `422` diretamente
-
-Migrar exige reescrever os modelos (`User`/`Data` viram um único DTO) e trocar as
-asserções de `json.Code` para o status da resposta.
+Migrar para uma LTS atual (.NET 8) exigiria também atualizar o RestSharp, que mudou de API
+de forma incompatível a partir da versão 107 (`IRestResponse` → `RestResponse`,
+`Execute` → `ExecuteAsync`).
 
 ---
 
@@ -191,3 +268,15 @@ providers são `public`.
 
 `models/User.cs` também importa `FluentAssertions`, `System.Collections.Generic` e
 `System.Text` sem usar nenhum deles.
+
+---
+
+## Não é problema: `Hooks` como classe estática
+
+`Hooks` é declarada `public static class` com `[SetUpFixture]`, o que contraria a
+recomendação da documentação do NUnit (classe não estática, com construtor público sem
+parâmetros).
+
+Na prática, **o NUnit 3.12 executa os hooks normalmente** — a execução confirmou que
+`CriarUsuario()` roda e que sua exceção propaga corretamente como `OneTimeSetUp` para as
+4 fixtures. Não é a causa das falhas atuais e não precisa ser mexido.

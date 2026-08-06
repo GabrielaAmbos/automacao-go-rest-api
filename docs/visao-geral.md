@@ -19,6 +19,11 @@ https://gorest.co.in/public-api
 
 O recurso exercitado é `/users`.
 
+> ⚠️ **Essa versão foi descontinuada.** Hoje ela responde `301` redirecionando para
+> `https://gorest.co.in/public/v2`, que tem contrato diferente. É por isso que os 7 testes
+> falham. Veja [Pontos de atenção](pontos-de-atencao.md#1-a-api-alvo-foi-descontinuada--bloqueia-toda-a-suíte).
+> O restante desta seção descreve o contrato da v1, que é o que o código ainda assume.
+
 ### Particularidade importante: código de status no corpo
 
 Essa versão da API responde **HTTP 200 na maior parte das chamadas**, e informa o
