@@ -7,7 +7,7 @@ using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using RestSharp;
 
-namespace Go_Rest_API_Automation.tests
+namespace Go_Rest_API_Automation.tests.users
 {
     [TestFixture]
     public class PutAlterarUsuario
@@ -55,9 +55,11 @@ namespace Go_Rest_API_Automation.tests
             jObjectBody.Add("email", UserFactory.UniqueEmail("Ronald McDonald"));
             jObjectBody.Add("status", "active");
 
-            var response = ApiClient<User>.Request(EndpointProvider.User(-user.Id), Method.PUT, jObjectBody);
+            var response = ApiClient<ErrorMessage>.Request(
+                EndpointProvider.User(-user.Id), Method.PUT, jObjectBody);
 
             response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+            response.Data.Message.Should().Be("Resource not found");
         }
     }
 }

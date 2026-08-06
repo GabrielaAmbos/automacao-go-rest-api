@@ -2,12 +2,18 @@
 
 Projeto de automação no endpoint https://gorest.co.in/public/v2 utilizando a linguagem C# e o framework de automação RestSharp.
 
+**68 testes em 22 fixtures**, cobrindo os 4 recursos da API e os fluxos de erro.
+
 ## Features testadas:
 
-    /Get Buscar Usuário
-    /Post Criar Usuário
-    /Put Alterar Usuário
-    /Delete Excluir Usuário
+| Recurso | Cobertura |
+| --- | --- |
+| **users** | GET, POST, PUT, PATCH, DELETE, listagem, paginação e filtros por status/gênero/e-mail |
+| **posts** | CRUD completo via rota aninhada `/users/{id}/posts`, listagem e paginação |
+| **comments** | CRUD completo via rota aninhada `/posts/{id}/comments` |
+| **todos** | CRUD completo via rota aninhada `/users/{id}/todos`, filtro por status |
+| **autenticação** | 401 sem token e com token inválido, escopo do token sobre os recursos |
+| **validação** | 422 de campo obrigatório, e-mail duplicado, e-mail/gênero/status inválidos |
 
 ## Executando
 

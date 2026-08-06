@@ -3,8 +3,8 @@
 ## O que é este projeto
 
 Projeto de **automação de testes de API REST** desenvolvido como desafio técnico de QA.
-Ele valida o CRUD de usuários da API pública do [Go REST](https://gorest.co.in),
-exercitando os quatro verbos HTTP principais em cenários de sucesso e de falha.
+Ele valida a API pública do [Go REST](https://gorest.co.in) — os quatro recursos do
+domínio e os fluxos de erro — com 68 testes.
 
 Não é uma aplicação com código de produção: todo o código do repositório existe para
 executar e sustentar a suíte de testes.
@@ -15,12 +15,27 @@ executar e sustentar a suíte de testes.
 https://gorest.co.in/public/v2
 ```
 
-O recurso exercitado é `/users`.
+Quatro recursos, com relacionamento entre eles:
+
+```
+user ─┬─► post ──► comment
+      └─► todo
+```
+
+| Recurso | Coleção | Item | Rota aninhada |
+| --- | --- | --- | --- |
+| users | `/users` | `/users/{id}` | — |
+| posts | `/posts` | `/posts/{id}` | `/users/{id}/posts` |
+| comments | `/comments` | `/comments/{id}` | `/posts/{id}/comments` |
+| todos | `/todos` | `/todos/{id}` | `/users/{id}/todos` |
+
+Posts, comentários e tarefas **só podem ser criados pela rota aninhada** — é ela que
+estabelece o vínculo com o pai.
 
 ### Formato da resposta
 
 A v2 devolve o payload direto, sem envelope, e usa o **status HTTP** para comunicar o
-resultado da operação:
+resultado:
 
 ```json
 {
@@ -32,36 +47,66 @@ resultado da operação:
 }
 ```
 
-Por isso as asserções verificam `response.StatusCode` e os campos de `response.Data`,
-mapeados pelo modelo [`User`](../Go%20Rest%20API%20Automation/models/User.cs).
-
 Atenção aos valores: `gender` e `status` são **minúsculos** (`male`, `female`, `active`,
-`inactive`).
+`inactive`). Em `todos`, `status` é `pending` ou `completed`.
 
 ### Status por operação
 
-| Operação | Sucesso | Recurso inexistente |
-| --- | --- | --- |
-| `GET /users/{id}` | `200 OK` | `404 Not Found` |
-| `POST /users` | `201 Created` | — |
-| `PUT /users/{id}` | `200 OK` | `404 Not Found` |
-| `DELETE /users/{id}` | `204 No Content` (corpo vazio) | `404 Not Found` |
+| Operação | Sucesso | Inexistente | Corpo inválido |
+| --- | --- | --- | --- |
+| `GET /{recurso}` | `200 OK` | — | — |
+| `GET /{recurso}/{id}` | `200 OK` | `404` | — |
+| `POST` (rota aninhada) | `201 Created` | — | `422` |
+| `PUT` / `PATCH` | `200 OK` | `404` | `422` |
+| `DELETE` | `204 No Content` (corpo vazio) | `404` | — |
 
-Erros de validação no `POST` retornam `422` com a lista de campos:
+### Corpos de erro
 
 ```json
-[{"field":"email","message":"can't be blank"}]
+// 401 e 404
+{"message": "Resource not found"}
+
+// 422 — array, um item por campo
+[{"field": "email", "message": "has already been taken"}]
 ```
 
-### Autenticação
+### Paginação e filtros
 
-A API exige um token Bearer no header `Authorization`. O token é lido da variável de
-ambiente `GOREST_TOKEN` por
-[`TokenProvider`](../Go%20Rest%20API%20Automation/utils/providers/TokenProvider.cs)
-e injetado em toda requisição pelo `ApiClient`. Sem a variável, a suíte falha logo no
-setup com uma mensagem explícita.
+Toda coleção aceita `?page=` e `?per_page=`, e devolve a paginação em headers:
 
-Leitura de `/users` é pública; escrita exige o token (sem ele, `401`).
+```
+x-pagination-page: 2
+x-pagination-limit: 5
+x-pagination-pages: 590
+x-pagination-total: 2946
+```
+
+Filtros por campo funcionam via query: `?status=inactive`, `?gender=female`, `?email=…`.
+
+### Autenticação — o detalhe que mais surpreende
+
+A API exige um token Bearer no header `Authorization`, lido da variável de ambiente
+`GOREST_TOKEN` por
+[`TokenProvider`](../Go%20Rest%20API%20Automation/utils/providers/TokenProvider.cs).
+
+**Recursos criados pelo seu token ficam restritos a ele.** Sem token, a API responde
+`404 Resource not found` em vez de `401` — ela não vaza a existência do registro:
+
+| Requisição | Sem token |
+| --- | --- |
+| `GET /users` (coleção de seed) | `200` |
+| `GET /users/{id}` de um usuário que você criou | `404` |
+| `GET /posts/{id}` de um post de seed | `200` |
+| `GET /posts/{id}` de um post que você criou | `404` |
+| `POST /users` | `401 Authentication failed` |
+| `POST /users` com token falso | `401 Invalid token` |
+
+O `401` só aparece em escrita na coleção. Esse comportamento está coberto pela fixture
+`AutenticacaoApi`.
+
+### Rate limit
+
+`x-ratelimit-limit: 300` por minuto. A suíte completa consome bem menos que isso.
 
 ## Stack
 
@@ -78,21 +123,20 @@ Leitura de `/users` é pública; escrita exige o token (sem ele, `401`).
 O `.csproj` também referencia `MSTest.TestFramework` e `SpecFlow`, mas **nenhum dos dois
 é usado** pelo código atual.
 
-## Cobertura funcional
+## Cobertura
 
-| Operação | Cenário positivo | Cenário negativo |
-| --- | --- | --- |
-| `GET /users/{id}` | Busca usuário existente (200) | Busca ID inválido (404) |
-| `POST /users` | Cria usuário (201) | — |
-| `PUT /users/{id}` | Altera usuário existente (200) | Altera ID inválido (404) |
-| `DELETE /users/{id}` | Exclui usuário existente (204) | Exclui ID inválido (404) |
+| Grupo | Fixtures | Testes | O que cobre |
+| --- | --- | --- | --- |
+| users | 6 | 17 | CRUD completo, `PATCH`, listagem, paginação e 3 filtros |
+| posts | 5 | 13 | CRUD, rota aninhada, lista vazia, `422` |
+| comments | 5 | 12 | CRUD, rota aninhada, `422` de e-mail inválido |
+| todos | 5 | 13 | CRUD, rota aninhada, filtro por status, `422` |
+| errors | 2 | 13 | `401`, escopo do token e as 5 regras de validação de usuário |
+| **Total** | **22** | **68** | |
 
 Detalhes em [Casos de teste](casos-de-teste.md).
 
 ## Histórico do projeto
-
-O repositório evoluiu de testes com requisições duplicadas em cada arquivo para uma
-estrutura encapsulada — os commits registram essa progressão:
 
 1. `Encapsulando com a classe Hooks` — extração do setup/teardown compartilhado
 2. `Encapsulando os requests na ApiCliente` — centralização das chamadas HTTP
@@ -101,3 +145,4 @@ estrutura encapsulada — os commits registram essa progressão:
    descontinuada e passou a responder `301` com HTML, quebrando os 7 testes. A migração
    trocou o envelope `code`/`meta`/`data` pelo payload direto e as asserções de corpo pelo
    status HTTP
+5. `test: cobre posts, comments, todos e os fluxos de erro` — de 7 para 68 testes

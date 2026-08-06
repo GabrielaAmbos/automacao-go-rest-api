@@ -63,12 +63,20 @@ Saída esperada:
 
 ```
 Test Run Successful.
-Total tests: 7
-     Passed: 7
+Total tests: 68
+     Passed: 68
 ```
 
-A suíte é repetível: cada execução gera e-mails únicos e limpa a massa que criou, então
-pode rodar quantas vezes for preciso sem colisão de dados.
+A suíte leva cerca de 1 minuto e faz aproximadamente 150 chamadas — bem abaixo do rate
+limit de 300/min da API. É repetível: cada execução gera e-mails únicos e limpa a massa que
+criou, então pode rodar quantas vezes for preciso sem colisão de dados.
+
+### Executar um grupo de recursos
+
+```bash
+dotnet test --filter "FullyQualifiedName~tests.posts"
+dotnet test --filter "FullyQualifiedName~tests.errors"
+```
 
 ### Executar uma fixture específica
 

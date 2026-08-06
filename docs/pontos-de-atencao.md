@@ -1,6 +1,6 @@
 # Pontos de atenção
 
-> **Estado da suíte em 06/08/2026: 7 de 7 testes passando**, verificado em 3 execuções
+> **Estado da suíte em 06/08/2026: 68 de 68 testes passando**, verificado em 3 execuções
 > seguidas contra a API v2. Os bloqueios anteriores foram resolvidos na migração — o
 > registro está em [Resolvidos](#resolvidos), no fim do documento.
 
@@ -57,16 +57,19 @@ contido em um arquivo.
 
 ---
 
-## 4. Cobertura ainda rasa para uma suíte de API
+## 4. Lacunas remanescentes de cobertura
 
-O que existe cobre o caminho feliz e o `404` de cada verbo. Faltam cenários que costumam
-pegar regressão de verdade:
+Os 4 recursos, a paginação, os filtros e os fluxos de erro estão cobertos. O que ainda
+falta:
 
-- `POST` com payload inválido → `422` e a lista de campos com erro
-- `POST` com e-mail duplicado → `422`
-- Qualquer verbo de escrita sem token → `401`
-- `GET /users` (listagem) com paginação — a coleção Postman tem a chamada, a suíte não
-- `PATCH`, que a v2 suporta
+- **`PATCH` só é testado em `users`.** A v2 aceita o verbo nos outros três recursos
+- **Validação `422` só é exaustiva em `users`** (5 cenários). Em posts, comments e todos há
+  um ou dois casos, não a matriz completa
+- **Filtros só em `users` e `todos`.** Posts e comments também aceitam query por campo
+- **Nada valida `page` fora do intervalo** (`?page=99999`) nem `per_page` acima do máximo
+- **Concorrência e idempotência** — dois `DELETE` simultâneos, `PUT` repetido
+- A suíte é sequencial; NUnit permite paralelizar por fixture, o que cortaria o tempo de
+  execução
 
 ---
 

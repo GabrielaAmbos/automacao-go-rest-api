@@ -20,8 +20,9 @@ Documentação técnica do projeto de automação de testes de API do
 - **Cliente HTTP:** RestSharp 106
 - **Asserções:** FluentAssertions
 - **API sob teste:** `https://gorest.co.in/public/v2`
-- **Cenários automatizados:** 7 testes cobrindo GET, POST, PUT e DELETE de usuários
-- **Última execução:** 06/08/2026 — **7 de 7 passando**, verificado em 3 execuções seguidas
+- **Cenários automatizados:** 68 testes em 22 fixtures, cobrindo users, posts, comments,
+  todos, paginação, filtros, autenticação e validação
+- **Última execução:** 06/08/2026 — **68 de 68 passando**, verificado em 3 execuções seguidas
 
 ## Executando
 

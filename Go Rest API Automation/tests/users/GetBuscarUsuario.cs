@@ -5,7 +5,7 @@ using Go_Rest_API_Automation.models;
 using Go_Rest_API_Automation.utils.providers;
 using NUnit.Framework;
 
-namespace Go_Rest_API_Automation.tests
+namespace Go_Rest_API_Automation.tests.users
 {
     [TestFixture]
     public class GetBuscarUsuario
@@ -28,9 +28,10 @@ namespace Go_Rest_API_Automation.tests
         [Test]
         public void NaoDeveBuscarUsuario()
         {
-            var response = ApiClient<User>.Request(EndpointProvider.User(-Hooks.SharedUser.Id));
+            var response = ApiClient<ErrorMessage>.Request(EndpointProvider.User(-Hooks.SharedUser.Id));
 
             response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+            response.Data.Message.Should().Be("Resource not found");
         }
     }
 }

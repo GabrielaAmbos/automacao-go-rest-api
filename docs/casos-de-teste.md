@@ -1,144 +1,229 @@
 # Casos de teste
 
-A suíte tem **7 testes** distribuídos em 4 fixtures, mais a massa compartilhada do `Hooks`.
-Todos passam contra a API v2.
+**68 testes** em 22 fixtures, cobrindo os 4 recursos da API v2 e os fluxos de erro.
+
+| Grupo | Fixtures | Testes |
+| --- | --- | --- |
+| [users](#users) | 6 | 17 |
+| [posts](#posts) | 5 | 13 |
+| [comments](#comments) | 5 | 12 |
+| [todos](#todos) | 5 | 13 |
+| [errors](#errors) | 2 | 13 |
 
 ## Massa de teste
 
 ### `Hooks` — usuário compartilhado somente leitura
 
-[`tests/Hooks.cs`](../Go%20Rest%20API%20Automation/tests/Hooks.cs)
+[`tests/Hooks.cs`](../Go%20Rest%20API%20Automation/tests/Hooks.cs), `[SetUpFixture]` do namespace
+`Go_Rest_API_Automation.tests` — vale também para os sub-namespaces (`tests.users`,
+`tests.posts`, …).
 
 | Hook | Ação |
 | --- | --- |
-| `[OneTimeSetUp]` | Cria o usuário "Leroy Borgan" via `UserFactory` e expõe em `Hooks.SharedUser` |
+| `[OneTimeSetUp]` | Cria o usuário "Leroy Borgan" e expõe em `Hooks.SharedUser` |
 | `[OneTimeTearDown]` | Exclui esse usuário |
 
-Consumido apenas por `GetBuscarUsuario`. O e-mail é gerado com sufixo `Guid`, então cada
-execução usa um endereço novo.
+Consumido apenas por fixtures que **não alteram estado**.
 
-### `UserFactory` — massa própria por fixture
+### Factories — massa própria por fixture
 
-[`tests/UserFactory.cs`](../Go%20Rest%20API%20Automation/tests/UserFactory.cs)
+`UserFactory`, `PostFactory`, `CommentFactory` e `TodoFactory` criam e destroem a massa das
+fixtures que mutam dados. Todo e-mail é gerado com sufixo `Guid`, o que torna a suíte
+repetível.
 
-Fixtures que alteram estado criam e destroem o próprio usuário, sem tocar no compartilhado.
+Regra aplicada em todas as fixtures:
 
----
-
-## GET — `GetBuscarUsuario`
-
-[`tests/GetBuscarUsuario.cs`](../Go%20Rest%20API%20Automation/tests/GetBuscarUsuario.cs)
-
-### `DeveBuscarUsuario`
-
-Busca o usuário compartilhado e valida o corpo inteiro.
-
-- **Endpoint:** `GET /users/{SharedUser.Id}`
-- **Esperado:** `200 OK`
-- **Asserções:** `id`, `name`, `email` iguais aos do usuário criado; `gender == "male"`;
-  `status == "active"`
-
-### `NaoDeveBuscarUsuario`
-
-Busca um ID negativo, que a API trata como inexistente.
-
-- **Endpoint:** `GET /users/-{SharedUser.Id}`
-- **Esperado:** `404 Not Found`
+- massa **somente leitura** → `[OneTimeSetUp]` / `[OneTimeTearDown]`
+- massa que o teste **altera ou remove** → `[SetUp]` / `[TearDown]`
 
 ---
 
-## POST — `PostCriarUmUsuario`
+# users
 
-[`tests/PostCriarUmUsuario.cs`](../Go%20Rest%20API%20Automation/tests/PostCriarUmUsuario.cs)
+## `GetBuscarUsuario` — 2 testes
 
-### `DeveCriarUmUsuario`
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `DeveBuscarUsuario` | `GET /users/{id}` | `200` + corpo completo do usuário compartilhado |
+| `NaoDeveBuscarUsuario` | `GET /users/-{id}` | `404` + `{"message":"Resource not found"}` |
 
-- **Endpoint:** `POST /users`
-- **Corpo:**
+## `GetListarUsuarios` — 6 testes
 
-  ```json
-  {
-    "name": "Tomas Oliver",
-    "gender": "male",
-    "email": "tomas.oliver.<guid>@example.test",
-    "status": "active"
-  }
-  ```
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `DeveListarUsuarios` | `GET /users` | `200`, lista não vazia, `x-pagination-total` positivo |
+| `DeveRespeitarOTamanhoDaPagina` | `GET /users?page=1&per_page=5` | 5 itens, `x-pagination-limit` = 5 |
+| `DeveNavegarEntrePaginas` | `GET /users?page=1` e `?page=2` | páginas sem IDs em comum |
+| `DeveFiltrarPorStatus` | `GET /users?status=inactive` | todos os itens `inactive` |
+| `DeveFiltrarPorGenero` | `GET /users?gender=female` | todos os itens `female` |
+| `DeveFiltrarPorEmail` | `GET /users?email={email}` | exatamente 1 resultado |
 
-- **Esperado:** `201 Created`
-- **Asserções:** `id` positivo; `name`, `gender`, `email` e `status` refletem o corpo enviado
+## `PostCriarUmUsuario` — 2 testes
 
-### `ExcluirUsuarioCriado` — `[TearDown]`
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `DeveCriarUmUsuario` | `POST /users` | `201`, `id` positivo, corpo ecoado |
+| `DeveCriarUsuarioInativoDoGeneroFeminino` | `POST /users` (`female`/`inactive`) | `201` com os valores enviados |
 
-Exclui o usuário criado, usando o `id` guardado no teste. O guard `createdUserId != 0`
-evita chamada inútil quando o teste falha antes de criar.
+## `PutAlterarUsuario` — 2 testes
 
----
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `DeveAlterarUsuarioExistente` | `PUT /users/{id}` sem `gender` | `200`, campos atualizados, `gender` **preservado** |
+| `NaoDeveAlterarUsuario` | `PUT /users/-{id}` | `404` |
 
-## PUT — `PutAlterarUsuario`
+## `PatchAlterarUsuario` — 2 testes
 
-[`tests/PutAlterarUsuario.cs`](../Go%20Rest%20API%20Automation/tests/PutAlterarUsuario.cs)
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `DeveAlterarApenasOStatus` | `PATCH /users/{id}` só com `status` | `200`, `status` novo, `name`/`email`/`gender` intactos |
+| `NaoDeveAlterarUsuarioInexistente` | `PATCH /users/-{id}` | `404` |
 
-Cria a própria massa no `[SetUp]` e limpa no `[TearDown]` — o teste altera estado e não
-pode usar o usuário compartilhado.
+## `DelExcluirUsuario` — 3 testes
 
-### `DeveAlterarUsuarioExistente`
-
-- **Endpoint:** `PUT /users/{id}`
-- **Corpo:**
-
-  ```json
-  {
-    "name": "Ronald McDonald Jr",
-    "email": "ronald.mcdonald.<guid>@example.test",
-    "status": "inactive"
-  }
-  ```
-
-- **Esperado:** `200 OK`
-- **Asserções:** `id` inalterado; `name`, `email` e `status` atualizados; **`gender`
-  permanece `male`** — não foi enviado no corpo, então valida que a API preserva campos
-  omitidos
-
-O `status` muda para `inactive` de propósito: se o teste enviasse o mesmo valor que já
-estava lá, a asserção passaria mesmo que o `PUT` não tivesse efeito.
-
-### `NaoDeveAlterarUsuario`
-
-- **Endpoint:** `PUT /users/-{id}`
-- **Esperado:** `404 Not Found`
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `DeveExcluirUsuarioExistente` | `DELETE /users/{id}` | `204`, corpo vazio (`Data` null) |
+| `NaoDeveExcluirUsuarioInexistente` | `DELETE /users/-{id}` | `404` |
+| `NaoDeveBuscarUsuarioDepoisDeExcluir` | `DELETE` e depois `GET` | `404` — confirma que a exclusão teve efeito |
 
 ---
 
-## DELETE — `DelExcluirUsuario`
+# posts
 
-[`tests/DelExcluirUsuario.cs`](../Go%20Rest%20API%20Automation/tests/DelExcluirUsuario.cs)
+Posts são criados pela rota aninhada `POST /users/{userId}/posts`.
 
-Também cria a própria massa no `[SetUp]`.
+## `GetBuscarPost` — 2 testes
 
-### `DeveExcluirUsuarioExistente`
+`DeveBuscarPost` (`200`, valida `user_id`, `title` e `body`) e `NaoDeveBuscarPost` (`404`).
 
-- **Endpoint:** `DELETE /users/{id}`
-- **Esperado:** `204 No Content` (corpo vazio — `response.Data` vem `null`)
+## `GetListarPosts` — 4 testes
 
-### `NaoDeveExcluirUsuarioInexistente`
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `DeveListarPosts` | `GET /posts` | `200` + paginação |
+| `DeveRespeitarOTamanhoDaPagina` | `GET /posts?per_page=5` | 5 itens |
+| `DeveListarPostsDoUsuario` | `GET /users/{id}/posts` | exatamente o post criado |
+| `DeveRetornarListaVaziaParaUsuarioSemPosts` | `GET /users/{id}/posts` | `200` com lista vazia |
 
-- **Endpoint:** `DELETE /users/-{id}`
-- **Esperado:** `404 Not Found`
+## `PostCriarPost` — 3 testes
 
-O `[TearDown]` roda mesmo depois do teste positivo já ter excluído o usuário: a segunda
-chamada devolve `404`, e o `UserFactory.Delete` ignora o resultado de propósito.
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `DeveCriarPostParaUsuario` | `POST /users/{id}/posts` | `201`, `user_id` correto |
+| `NaoDeveCriarPostSemCamposObrigatorios` | corpo `{}` | `422` com `title` e `body` em branco |
+| `NaoDeveCriarPostParaUsuarioInexistente` | `POST /users/-{id}/posts` | `422` com erro no campo `user` |
+
+## `PutAlterarPost` — 2 testes
+
+`DeveAlterarPostExistente` (`200`, altera só `title` e valida que `body` é preservado) e
+`NaoDeveAlterarPostInexistente` (`404`).
+
+## `DelExcluirPost` — 2 testes
+
+`DeveExcluirPostExistente` (`204`) e `NaoDeveExcluirPostInexistente` (`404`).
 
 ---
 
-## Matriz resumida
+# comments
 
-| Fixture | Teste | Verbo | Status esperado |
-| --- | --- | --- | --- |
-| `GetBuscarUsuario` | `DeveBuscarUsuario` | GET | `200 OK` |
-| `GetBuscarUsuario` | `NaoDeveBuscarUsuario` | GET | `404 Not Found` |
-| `PostCriarUmUsuario` | `DeveCriarUmUsuario` | POST | `201 Created` |
-| `PutAlterarUsuario` | `DeveAlterarUsuarioExistente` | PUT | `200 OK` |
-| `PutAlterarUsuario` | `NaoDeveAlterarUsuario` | PUT | `404 Not Found` |
-| `DelExcluirUsuario` | `DeveExcluirUsuarioExistente` | DELETE | `204 No Content` |
-| `DelExcluirUsuario` | `NaoDeveExcluirUsuarioInexistente` | DELETE | `404 Not Found` |
+Comentários são criados pela rota aninhada `POST /posts/{postId}/comments`, o que exige
+uma cadeia usuário → post → comentário na massa.
+
+## `GetBuscarComentario` — 2 testes
+
+`DeveBuscarComentario` (`200`, valida `post_id`, `name`, `email` e `body`) e
+`NaoDeveBuscarComentario` (`404`).
+
+## `GetListarComentarios` — 3 testes
+
+`DeveListarComentarios` (`200` + paginação), `DeveRespeitarOTamanhoDaPagina` e
+`DeveListarComentariosDoPost` (`GET /posts/{id}/comments` devolve só o comentário criado).
+
+## `PostCriarComentario` — 3 testes
+
+| Teste | Esperado |
+| --- | --- |
+| `DeveCriarComentarioNoPost` | `201`, `post_id` correto |
+| `NaoDeveCriarComentarioComEmailInvalido` | `422` com `email` → `is invalid` |
+| `NaoDeveCriarComentarioSemCamposObrigatorios` | `422` com `name` e `body` em branco |
+
+## `PutAlterarComentario` — 2 testes
+
+`DeveAlterarComentarioExistente` (`200`, altera só `body` e valida que `name` é preservado)
+e `NaoDeveAlterarComentarioInexistente` (`404`).
+
+## `DelExcluirComentario` — 2 testes
+
+`DeveExcluirComentarioExistente` (`204`) e `NaoDeveExcluirComentarioInexistente` (`404`).
+
+---
+
+# todos
+
+Tarefas são criadas pela rota aninhada `POST /users/{userId}/todos`.
+
+## `GetBuscarTarefa` — 2 testes
+
+`DeveBuscarTarefa` (`200`, valida `user_id`, `title`, `status` e `due_on`) e
+`NaoDeveBuscarTarefa` (`404`).
+
+## `GetListarTarefas` — 4 testes
+
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `DeveListarTarefas` | `GET /todos` | `200` + paginação |
+| `DeveRespeitarOTamanhoDaPagina` | `GET /todos?per_page=5` | 5 itens |
+| `DeveFiltrarPorStatus` | `GET /todos?status=completed` | todos os itens `completed` |
+| `DeveListarTarefasDoUsuario` | `GET /users/{id}/todos` | exatamente a tarefa criada |
+
+## `PostCriarTarefa` — 3 testes
+
+| Teste | Esperado |
+| --- | --- |
+| `DeveCriarTarefaParaUsuario` | `201`, `user_id` e `due_on` corretos |
+| `NaoDeveCriarTarefaComStatusInvalido` | `422` no campo `status` |
+| `NaoDeveCriarTarefaSemCamposObrigatorios` | `422` com `title` em branco |
+
+## `PutAlterarTarefa` — 2 testes
+
+`DeveConcluirTarefa` (`pending` → `completed`, valida que `title` é preservado) e
+`NaoDeveAlterarTarefaInexistente` (`404`).
+
+## `DelExcluirTarefa` — 2 testes
+
+`DeveExcluirTarefaExistente` (`204`) e `NaoDeveExcluirTarefaInexistente` (`404`).
+
+---
+
+# errors
+
+## `AutenticacaoApi` — 8 testes
+
+Cobrem uma regra da API que não é óbvia: **recursos criados pelo seu token ficam restritos
+a ele**. Sem token a API responde `404`, não `401`, para não vazar a existência do
+registro. O `401` só aparece em escrita na coleção.
+
+| Teste | Requisição | Esperado |
+| --- | --- | --- |
+| `NaoDeveCriarUsuarioSemToken` | `POST /users` sem header | `401` + `Authentication failed` |
+| `NaoDeveCriarUsuarioComTokenInvalido` | `POST /users` com token falso | `401` + `Invalid token` |
+| `DeveListarUsuariosSemToken` | `GET /users` | `200` — a coleção de seed é pública |
+| `NaoDeveBuscarUsuarioSemToken` | `GET /users/{id}` sem header | `404` |
+| `NaoDeveAlterarUsuarioSemToken` | `PUT /users/{id}` sem header | `404` + usuário intacto na verificação seguinte |
+| `NaoDeveExcluirUsuarioSemToken` | `DELETE /users/{id}` sem header | `404` + usuário intacto |
+| `NaoDeveBuscarPostCriadoPeloTokenSemAutenticacao` | `GET /posts/{id}` sem header | `404` |
+| `DeveBuscarPostPublicoSemToken` | `GET /posts/{id}` de um post de seed | `200` |
+
+Os dois testes de escrita não param no status: confirmam com token que a tentativa não
+teve efeito colateral. Isso os mantém independentes da ordem de execução.
+
+## `ValidacaoUsuario` — 5 testes
+
+| Teste | Corpo enviado | Esperado |
+| --- | --- | --- |
+| `NaoDeveCriarUsuarioSemCamposObrigatorios` | `{}` | `422` com exatamente 4 erros: `email`, `name`, `gender`, `status` |
+| `NaoDeveCriarUsuarioComEmailDuplicado` | e-mail já cadastrado | `422` + `has already been taken` |
+| `NaoDeveCriarUsuarioComEmailInvalido` | `nao-eh-email` | `422` + `is invalid` |
+| `NaoDeveCriarUsuarioComGeneroInvalido` | `gender: "outro"` | `422` no campo `gender` |
+| `NaoDeveCriarUsuarioComStatusInvalido` | `status: "quase-ativo"` | `422` no campo `status` |

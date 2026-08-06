@@ -7,23 +7,28 @@ using Newtonsoft.Json.Linq;
 using NUnit.Framework;
 using RestSharp;
 
-namespace Go_Rest_API_Automation.tests
+namespace Go_Rest_API_Automation.tests.users
 {
     [TestFixture]
     public class PostCriarUmUsuario
     {
         private int createdUserId;
 
+        [TearDown]
+        public void ExcluirUsuarioCriado()
+        {
+            if (createdUserId != 0)
+            {
+                UserFactory.Delete(createdUserId);
+                createdUserId = 0;
+            }
+        }
+
         [Test]
         public void DeveCriarUmUsuario()
         {
             string email = UserFactory.UniqueEmail("Tomas Oliver");
-
-            JObject jObjectBody = new JObject();
-            jObjectBody.Add("name", "Tomas Oliver");
-            jObjectBody.Add("gender", "male");
-            jObjectBody.Add("email", email);
-            jObjectBody.Add("status", "active");
+            JObject jObjectBody = UserFactory.Body("Tomas Oliver", email, "male", "active");
 
             var response = ApiClient<User>.Request(EndpointProvider.Users(), Method.POST, jObjectBody);
 
@@ -37,14 +42,19 @@ namespace Go_Rest_API_Automation.tests
             response.Data.Status.Should().Be("active");
         }
 
-        [TearDown]
-        public void ExcluirUsuarioCriado()
+        [Test]
+        public void DeveCriarUsuarioInativoDoGeneroFeminino()
         {
-            if (createdUserId != 0)
-            {
-                UserFactory.Delete(createdUserId);
-                createdUserId = 0;
-            }
+            string email = UserFactory.UniqueEmail("Marie Curie");
+            JObject jObjectBody = UserFactory.Body("Marie Curie", email, "female", "inactive");
+
+            var response = ApiClient<User>.Request(EndpointProvider.Users(), Method.POST, jObjectBody);
+
+            createdUserId = response.Data.Id;
+
+            response.StatusCode.Should().Be(HttpStatusCode.Created);
+            response.Data.Gender.Should().Be("female");
+            response.Data.Status.Should().Be("inactive");
         }
     }
 }

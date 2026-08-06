@@ -11,13 +11,25 @@ namespace Go_Rest_API_Automation.tests
     {
         public static User Create(string name)
         {
-            JObject jObjectBody = new JObject();
-            jObjectBody.Add("name", name);
-            jObjectBody.Add("gender", "male");
-            jObjectBody.Add("email", UniqueEmail(name));
-            jObjectBody.Add("status", "active");
+            return Create(name, "male", "active");
+        }
+
+        public static User Create(string name, string gender, string status)
+        {
+            JObject jObjectBody = Body(name, UniqueEmail(name), gender, status);
 
             return ApiClient<User>.Request(EndpointProvider.Users(), Method.POST, jObjectBody).Data;
+        }
+
+        public static JObject Body(string name, string email, string gender, string status)
+        {
+            JObject jObjectBody = new JObject();
+            jObjectBody.Add("name", name);
+            jObjectBody.Add("gender", gender);
+            jObjectBody.Add("email", email);
+            jObjectBody.Add("status", status);
+
+            return jObjectBody;
         }
 
         public static void Delete(int id)
