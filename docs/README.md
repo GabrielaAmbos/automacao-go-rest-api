@@ -11,6 +11,7 @@ Documentação técnica do projeto de automação de testes de API do
 | [Arquitetura](arquitetura.md) | Estrutura de pastas, camadas e fluxo de uma requisição |
 | [Casos de teste](casos-de-teste.md) | Detalhamento de cada cenário automatizado |
 | [Como executar](como-executar.md) | Pré-requisitos, build, execução e coleção Postman |
+| [Histórico de execuções](historico-de-execucoes.md) | Todas as execuções da suíte, falhas e causas |
 | [Pontos de atenção](pontos-de-atencao.md) | Débitos técnicos remanescentes |
 
 ## Resumo rápido

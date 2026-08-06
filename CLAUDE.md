@@ -182,4 +182,5 @@ Mapeados em [docs/pontos-de-atencao.md](docs/pontos-de-atencao.md):
 | [docs/arquitetura.md](docs/arquitetura.md) | Camadas, `ApiClient`, factories, fluxo |
 | [docs/casos-de-teste.md](docs/casos-de-teste.md) | Os 68 cenários em detalhe |
 | [docs/como-executar.md](docs/como-executar.md) | SDK, token, execução, Postman, falhas comuns |
+| [docs/historico-de-execucoes.md](docs/historico-de-execucoes.md) | As 13 execuções da sessão, falhas e causas |
 | [docs/pontos-de-atencao.md](docs/pontos-de-atencao.md) | Débitos em aberto + histórico dos resolvidos |
